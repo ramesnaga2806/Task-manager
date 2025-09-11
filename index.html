@@ -74,10 +74,10 @@
     import { getAnalytics } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-analytics.js";
     import {
       getFirestore, collection, addDoc, serverTimestamp, onSnapshot,
-      query, orderBy, doc, updateDoc
+      query, orderBy, doc, updateDoc, deleteDoc   // ✅ added deleteDoc
     } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore.js";
 
-    // ✅ Your Firebase config (from Firebase Console)
+    // ✅ Your Firebase config
     const firebaseConfig = {
       apiKey: "AIzaSyBsgq8DhQvh3gzDnRZV1OvinoQytOK7zi8",
       authDomain: "sswr-task-manager.firebaseapp.com",
@@ -205,19 +205,28 @@
           commitTextUpdate({ updateRemark: updateRemarkCell.innerText });
         });
 
+        // Status change handler
         select.addEventListener("change", async () => {
           const newStatus = select.value;
-          const payload = { status: newStatus, currentDate: serverTimestamp() };
           if (newStatus === "Complete") {
-            payload.completedAt = serverTimestamp();
+            // ✅ Delete doc if status is Complete
+            await deleteDoc(docRef);
+            row.remove();
+          } else {
+            await updateDoc(docRef, { status: newStatus, currentDate: serverTimestamp() });
           }
-          await updateDoc(docRef, payload);
-          row.remove();
         });
 
+        // Complete Task button handler
         completeBtn.addEventListener("click", async () => {
-          await updateDoc(docRef, { status: "Complete", completedAt: serverTimestamp(), currentDate: serverTimestamp() });
-          row.remove();
+          try {
+            await deleteDoc(docRef);   // ✅ delete from Firestore
+            row.remove();              // remove from UI
+            alert("Task deleted after completion!");
+          } catch (err) {
+            console.error("Error deleting task:", err);
+            alert("Failed to delete task.");
+          }
         });
       });
       applyFilter();
