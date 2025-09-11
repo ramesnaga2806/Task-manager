@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>SSWR Task Manager (Firestore)</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; }
+    h2 { margin-bottom: 10px; }
+    form input, form textarea, form select, form button {
+      margin: 5px 0; display: block; width: 100%; max-width: 400px; padding: 8px;
+    }
+    table { border-collapse: collapse; width: 100%; margin-top: 20px; }
+    table, th, td { border: 1px solid #ccc; }
+    th, td { padding: 8px; text-align: left; vertical-align: top; }
+    button.complete-btn { background-color: #28a745; color: #fff; border: none; padding: 5px 10px; cursor: pointer; border-radius: 4px; }
+    td[contenteditable="true"] { background: #fffbea; }
+    select.status-select { padding: 4px; }
+  </style>
+</head>
+<body>
+  <h2>SSWR Task Manager (Firestore)</h2>
+  <p><strong>Note:</strong> Tasks are saved to <em>Cloud Firestore</em>.</p>
+
+  <label for="departmentFilter"><strong>View Department:</strong></label>
+  <select id="departmentFilter">
+    <option value="All">All</option>
+    <option value="Inbound">Inbound</option>
+    <option value="Outbound">Outbound</option>
+    <option value="Wave Planner">Wave Planner</option>
+    <option value="Inventory">Inventory</option>
+    <option value="Rework">Rework</option>
+    <option value="Return">Return</option>
+    <option value="PTC">PTC</option>
+    <option value="PTL">PTL</option>
+    <option value="Admin">Admin</option>
+  </select>
+
+  <form id="taskForm">
+    <input type="text" id="title" placeholder="Title" required />
+    <input type="text" id="emailSubject" placeholder="Email Subject (Optional)" />
+    <input type="text" id="requestBy" placeholder="Request By" required />
+    <textarea id="remark" placeholder="Remark"></textarea>
+    <select id="department" required>
+      <option value="">Select Department</option>
+      <option value="Inbound">Inbound</option>
+      <option value="Outbound">Outbound</option>
+      <option value="Wave Planner">Wave Planner</option>
+      <option value="Inventory">Inventory</option>
+      <option value="Rework">Rework</option>
+      <option value="Return">Return</option>
+      <option value="PTC">PTC</option>
+      <option value="PTL">PTL</option>
+      <option value="Admin">Admin</option>
+    </select>
+    <button type="submit">Add Task</button>
+  </form>
+
+  <table id="taskTable">
+    <thead>
+      <tr>
+        <th>Department</th><th>Title</th><th>Email Subject</th><th>Request By</th><th>Remark</th>
+        <th>Created Date & Time</th><th>Incharge Person</th><th>Status of Progress</th>
+        <th>Update Remark</th><th>Current Date & Time</th><th>Complete Task</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+
+  <!-- Firebase + Firestore -->
+  <script type="module">
+    // Firebase SDK imports
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-app.js";
+    import { getAnalytics } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-analytics.js";
+    import {
+      getFirestore, collection, addDoc, serverTimestamp, onSnapshot,
+      query, orderBy, doc, updateDoc
+    } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore.js";
+
+    // ✅ Your Firebase config (from Firebase Console)
+    const firebaseConfig = {
+      apiKey: "AIzaSyBsgq8DhQvh3gzDnRZV1OvinoQytOK7zi8",
+      authDomain: "sswr-task-manager.firebaseapp.com",
+      projectId: "sswr-task-manager",
+      storageBucket: "sswr-task-manager.firebasestorage.app",
+      messagingSenderId: "579546899458",
+      appId: "1:579546899458:web:f03cbe676239a51925b31b",
+      measurementId: "G-6BKJ4RDFVL"
+    };
+
+    // Init Firebase
+    const app = initializeApp(firebaseConfig);
+    const analytics = getAnalytics(app);
+    const db = getFirestore(app);
+    const tasksCol = collection(db, "tasks");
+
+    const taskForm = document.getElementById("taskForm");
+    const taskTableBody = document.getElementById("taskTable").querySelector("tbody");
+    const departmentFilter = document.getElementById("departmentFilter");
+
+    // helper debounce
+    function debounce(fn, wait=700) {
+      let t;
+      return (...args) => {
+        clearTimeout(t);
+        t = setTimeout(()=> fn(...args), wait);
+      };
+    }
+    function formatTimestamp(ts) {
+      if (!ts) return "—";
+      try { return ts.toDate().toLocaleString(); }
+      catch (e) { return String(ts); }
+    }
+
+    // Add Task
+    taskForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const title = document.getElementById("title").value.trim();
+      const emailSubject = document.getElementById("emailSubject").value.trim();
+      const requestBy = document.getElementById("requestBy").value.trim();
+      const remark = document.getElementById("remark").value.trim();
+      const department = document.getElementById("department").value;
+
+      try {
+        await addDoc(tasksCol, {
+          department,
+          title,
+          emailSubject,
+          requestBy,
+          remark,
+          createdDate: serverTimestamp(),
+          inchargePerson: "",
+          status: "Open",
+          updateRemark: "",
+          currentDate: serverTimestamp()
+        });
+        alert("Task saved successfully!");
+        taskForm.reset();
+      } catch (err) {
+        console.error("Failed to save:", err);
+        alert("Failed to save task.");
+      }
+    });
+
+    // Real-time listener
+    const q = query(tasksCol, orderBy("createdDate", "desc"));
+    onSnapshot(q, (snapshot) => {
+      taskTableBody.innerHTML = "";
+      snapshot.forEach(docSnap => {
+        const data = docSnap.data();
+        const id = docSnap.id;
+        const row = taskTableBody.insertRow();
+        row.setAttribute("data-department", data.department || "");
+        row.setAttribute("data-id", id);
+
+        row.insertCell(0).innerText = data.department || "";
+        row.insertCell(1).innerText = data.title || "";
+        row.insertCell(2).innerText = data.emailSubject || "";
+        row.insertCell(3).innerText = data.requestBy || "";
+        row.insertCell(4).innerText = data.remark || "";
+        row.insertCell(5).innerText = formatTimestamp(data.createdDate);
+
+        // Incharge Person
+        const inchargeCell = row.insertCell(6);
+        inchargeCell.contentEditable = "true";
+        inchargeCell.innerText = data.inchargePerson || "";
+
+        // Status
+        const statusCell = row.insertCell(7);
+        const select = document.createElement("select");
+        select.className = "status-select";
+        ["Open", "Progress", "Complete"].forEach(optText => {
+          const opt = document.createElement("option");
+          opt.value = optText;
+          opt.textContent = optText;
+          select.appendChild(opt);
+        });
+        select.value = data.status || "Open";
+        statusCell.appendChild(select);
+
+        // Update Remark
+        const updateRemarkCell = row.insertCell(8);
+        updateRemarkCell.contentEditable = "true";
+        updateRemarkCell.innerText = data.updateRemark || "";
+
+        row.insertCell(9).innerText = formatTimestamp(data.currentDate);
+
+        const completeCell = row.insertCell(10);
+        const completeBtn = document.createElement("button");
+        completeBtn.textContent = "Complete Task";
+        completeBtn.className = "complete-btn";
+        completeCell.appendChild(completeBtn);
+
+        const docRef = doc(db, "tasks", id);
+
+        // Debounced updates
+        const commitTextUpdate = debounce(async (changes) => {
+          await updateDoc(docRef, { ...changes, currentDate: serverTimestamp() });
+        }, 800);
+
+        inchargeCell.addEventListener("input", () => {
+          commitTextUpdate({ inchargePerson: inchargeCell.innerText });
+        });
+        updateRemarkCell.addEventListener("input", () => {
+          commitTextUpdate({ updateRemark: updateRemarkCell.innerText });
+        });
+
+        select.addEventListener("change", async () => {
+          const newStatus = select.value;
+          const payload = { status: newStatus, currentDate: serverTimestamp() };
+          if (newStatus === "Complete") {
+            payload.completedAt = serverTimestamp();
+          }
+          await updateDoc(docRef, payload);
+          row.remove();
+        });
+
+        completeBtn.addEventListener("click", async () => {
+          await updateDoc(docRef, { status: "Complete", completedAt: serverTimestamp(), currentDate: serverTimestamp() });
+          row.remove();
+        });
+      });
+      applyFilter();
+    });
+
+    // Filter
+    departmentFilter.addEventListener("change", applyFilter);
+    function applyFilter() {
+      const sel = departmentFilter.value;
+      for (let r of taskTableBody.rows) {
+        const dept = r.getAttribute("data-department") || "";
+        r.style.display = (sel === "All" || dept === sel) ? "" : "none";
+      }
+    }
+  </script>
+</body>
+</html>
