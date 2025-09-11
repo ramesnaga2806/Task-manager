@@ -74,7 +74,7 @@
     import { getAnalytics } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-analytics.js";
     import {
       getFirestore, collection, addDoc, serverTimestamp, onSnapshot,
-      query, orderBy, doc, updateDoc, deleteDoc   // ✅ added deleteDoc
+      query, orderBy, doc, updateDoc, deleteDoc
     } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore.js";
 
     // ✅ Your Firebase config
@@ -205,22 +205,20 @@
           commitTextUpdate({ updateRemark: updateRemarkCell.innerText });
         });
 
-        // Status change handler
+        // ✅ Status change handler (only updates status, no delete)
         select.addEventListener("change", async () => {
           const newStatus = select.value;
-          if (newStatus === "Complete") {
-            // ✅ Delete doc if status is Complete
-            await deleteDoc(docRef);
-            row.remove();
-          } else {
+          try {
             await updateDoc(docRef, { status: newStatus, currentDate: serverTimestamp() });
+          } catch (err) {
+            console.error("Error updating status:", err);
           }
         });
 
-        // Complete Task button handler
+        // ✅ Complete Task button handler (deletes only when clicked)
         completeBtn.addEventListener("click", async () => {
           try {
-            await deleteDoc(docRef);   // ✅ delete from Firestore
+            await deleteDoc(docRef);   // delete from Firestore
             row.remove();              // remove from UI
             alert("Task deleted after completion!");
           } catch (err) {
