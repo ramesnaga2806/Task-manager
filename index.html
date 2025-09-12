@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Task Manager</title>
+  <title>SSWR Task Manager (Firestore)</title>
   <style>
     body { font-family: Arial, sans-serif; margin: 20px; }
     h2 { margin-bottom: 10px; }
@@ -19,7 +19,7 @@
   </style>
 </head>
 <body>
-  <h2>Task Manager</h2>
+  <h2>SSWR Task Manager (Firestore)</h2>
   
   <!-- Updated Note -->
   <p><strong>Note 1:</strong> The transaction could not be saved in the data storage.</p>
@@ -98,11 +98,11 @@
     const taskTableBody = document.getElementById("taskTable").querySelector("tbody");
     const departmentFilter = document.getElementById("departmentFilter");
 
-    function debounce(fn, wait=700) {
+    function debounce(fn, wait=30000) { // 30 seconds debounce
       let t;
       return (...args) => {
         clearTimeout(t);
-        t = setTimeout(()=> fn(...args), wait);
+        t = setTimeout(() => fn(...args), wait);
       };
     }
     function formatTimestamp(ts) {
@@ -187,9 +187,10 @@
 
         const docRef = doc(db, "tasks", id);
 
+        // ✅ Debounce 30 seconds for full update
         const commitTextUpdate = debounce(async (changes) => {
           await updateDoc(docRef, { ...changes, currentDate: serverTimestamp() });
-        }, 800);
+        }, 30000);
 
         inchargeCell.addEventListener("input", () => {
           commitTextUpdate({ inchargePerson: inchargeCell.innerText });
