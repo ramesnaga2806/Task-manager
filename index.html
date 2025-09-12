@@ -98,13 +98,6 @@
     const taskTableBody = document.getElementById("taskTable").querySelector("tbody");
     const departmentFilter = document.getElementById("departmentFilter");
 
-    function debounce(fn, wait=30000) { // 30 seconds debounce
-      let t;
-      return (...args) => {
-        clearTimeout(t);
-        t = setTimeout(() => fn(...args), wait);
-      };
-    }
     function formatTimestamp(ts) {
       if (!ts) return "—";
       try { return ts.toDate().toLocaleString(); }
@@ -187,33 +180,51 @@
 
         const docRef = doc(db, "tasks", id);
 
-        // ✅ Debounce 30 seconds for full update
-        const commitTextUpdate = debounce(async (changes) => {
-          await updateDoc(docRef, { ...changes, currentDate: serverTimestamp() });
-        }, 30000);
+        // Pending timers for delayed currentDate update
+        const pendingUpdates = {};
 
-        inchargeCell.addEventListener("input", () => {
-          commitTextUpdate({ inchargePerson: inchargeCell.innerText });
-        });
-        updateRemarkCell.addEventListener("input", () => {
-          commitTextUpdate({ updateRemark: updateRemarkCell.innerText });
-        });
+        function scheduleCurrentDateUpdate(docRef) {
+          const id = docRef.id;
+          if (pendingUpdates[id]) clearTimeout(pendingUpdates[id]);
+          pendingUpdates[id] = setTimeout(async () => {
+            try {
+              await updateDoc(docRef, { currentDate: serverTimestamp() });
+            } catch (err) {
+              console.error("Error updating currentDate:", err);
+            }
+            delete pendingUpdates[id];
+          }, 30000); // 30 seconds delay
+        }
 
-        select.addEventListener("change", async () => {
-          const newStatus = select.value;
+        // Live update fields
+        inchargeCell.addEventListener("input", async () => {
           try {
-            await updateDoc(docRef, { status: newStatus, currentDate: serverTimestamp() });
-          } catch (err) {
-            console.error("Error updating status:", err);
-          }
+            await updateDoc(docRef, { inchargePerson: inchargeCell.innerText });
+          } catch (err) { console.error(err); }
+          scheduleCurrentDateUpdate(docRef);
         });
 
+        updateRemarkCell.addEventListener("input", async () => {
+          try {
+            await updateDoc(docRef, { updateRemark: updateRemarkCell.innerText });
+          } catch (err) { console.error(err); }
+          scheduleCurrentDateUpdate(docRef);
+        });
+
+        // Status updates immediately
+        select.addEventListener("change", async () => {
+          try {
+            await updateDoc(docRef, { status: select.value, currentDate: serverTimestamp() });
+          } catch (err) { console.error(err); }
+        });
+
+        // Complete task
         completeBtn.addEventListener("click", async () => {
           try {
             await deleteDoc(docRef);
             row.remove();
           } catch (err) {
-            console.error("Error deleting task:", err);
+            console.error(err);
           }
         });
       });
