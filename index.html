@@ -21,7 +21,6 @@
 <body>
   <h2>SSWR Task Manager (Firestore)</h2>
   
-  <!-- Updated Note -->
   <p><strong>Note 1:</strong> The transaction could not be saved in the data storage.</p>
   <p><strong>Note 2:</strong> Only the user who originally assigned the task is authorized to mark it as ‘Complete’.</p>
 
@@ -70,7 +69,6 @@
     <tbody></tbody>
   </table>
 
-  <!-- Firebase + Firestore -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-app.js";
     import { getAnalytics } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-analytics.js";
@@ -98,13 +96,20 @@
     const taskTableBody = document.getElementById("taskTable").querySelector("tbody");
     const departmentFilter = document.getElementById("departmentFilter");
 
+    function debounce(fn, wait=10000) { // 10 seconds debounce
+      let t;
+      return (...args) => {
+        clearTimeout(t);
+        t = setTimeout(() => fn(...args), wait);
+      };
+    }
+
     function formatTimestamp(ts) {
       if (!ts) return "—";
       try { return ts.toDate().toLocaleString(); }
       catch (e) { return String(ts); }
     }
 
-    // Add Task
     taskForm.addEventListener("submit", async (e) => {
       e.preventDefault();
       const title = document.getElementById("title").value.trim();
@@ -132,7 +137,6 @@
       }
     });
 
-    // Real-time listener
     const q = query(tasksCol, orderBy("createdDate", "desc"));
     onSnapshot(q, (snapshot) => {
       taskTableBody.innerHTML = "";
@@ -180,52 +184,29 @@
 
         const docRef = doc(db, "tasks", id);
 
-        // Pending timers for delayed currentDate update
-        const pendingUpdates = {};
+        // Both incharge and update remark will update after 10s
+        const commitTextUpdate = debounce(async (changes) => {
+          await updateDoc(docRef, { ...changes, currentDate: serverTimestamp() });
+        }, 10000); // 10 seconds
 
-        function scheduleCurrentDateUpdate(docRef) {
-          const id = docRef.id;
-          if (pendingUpdates[id]) clearTimeout(pendingUpdates[id]);
-          pendingUpdates[id] = setTimeout(async () => {
-            try {
-              await updateDoc(docRef, { currentDate: serverTimestamp() });
-            } catch (err) {
-              console.error("Error updating currentDate:", err);
-            }
-            delete pendingUpdates[id];
-          }, 30000); // 30 seconds delay
-        }
-
-        // Live update fields
-        inchargeCell.addEventListener("input", async () => {
-          try {
-            await updateDoc(docRef, { inchargePerson: inchargeCell.innerText });
-          } catch (err) { console.error(err); }
-          scheduleCurrentDateUpdate(docRef);
+        inchargeCell.addEventListener("input", () => {
+          commitTextUpdate({ inchargePerson: inchargeCell.innerText });
+        });
+        updateRemarkCell.addEventListener("input", () => {
+          commitTextUpdate({ updateRemark: updateRemarkCell.innerText });
         });
 
-        updateRemarkCell.addEventListener("input", async () => {
-          try {
-            await updateDoc(docRef, { updateRemark: updateRemarkCell.innerText });
-          } catch (err) { console.error(err); }
-          scheduleCurrentDateUpdate(docRef);
-        });
-
-        // Status updates immediately
         select.addEventListener("change", async () => {
           try {
             await updateDoc(docRef, { status: select.value, currentDate: serverTimestamp() });
           } catch (err) { console.error(err); }
         });
 
-        // Complete task
         completeBtn.addEventListener("click", async () => {
           try {
             await deleteDoc(docRef);
             row.remove();
-          } catch (err) {
-            console.error(err);
-          }
+          } catch (err) { console.error(err); }
         });
       });
       applyFilter();
