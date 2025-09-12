@@ -20,7 +20,6 @@
 </head>
 <body>
   <h2>SSWR Task Manager (Firestore)</h2>
-  
   <p><strong>Note 1:</strong> The transaction could not be saved in the data storage.</p>
   <p><strong>Note 2:</strong> Only the user who originally assigned the task is authorized to mark it as ‘Complete’.</p>
 
@@ -72,10 +71,7 @@
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-app.js";
     import { getAnalytics } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-analytics.js";
-    import {
-      getFirestore, collection, addDoc, serverTimestamp, onSnapshot,
-      query, orderBy, doc, updateDoc, deleteDoc
-    } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore.js";
+    import { getFirestore, collection, addDoc, serverTimestamp, onSnapshot, query, orderBy, doc, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyBsgq8DhQvh3gzDnRZV1OvinoQytOK7zi8",
@@ -96,11 +92,11 @@
     const taskTableBody = document.getElementById("taskTable").querySelector("tbody");
     const departmentFilter = document.getElementById("departmentFilter");
 
-    function debounce(fn, wait=10000) { // 10 seconds debounce
-      let t;
+    function debounce(fn, wait = 10000) {
+      let timer;
       return (...args) => {
-        clearTimeout(t);
-        t = setTimeout(() => fn(...args), wait);
+        clearTimeout(timer);
+        timer = setTimeout(() => fn(...args), wait);
       };
     }
 
@@ -110,6 +106,7 @@
       catch (e) { return String(ts); }
     }
 
+    // Add Task
     taskForm.addEventListener("submit", async (e) => {
       e.preventDefault();
       const title = document.getElementById("title").value.trim();
@@ -120,11 +117,7 @@
 
       try {
         await addDoc(tasksCol, {
-          department,
-          title,
-          emailSubject,
-          requestBy,
-          remark,
+          department, title, emailSubject, requestBy, remark,
           createdDate: serverTimestamp(),
           inchargePerson: "",
           status: "Open",
@@ -137,6 +130,7 @@
       }
     });
 
+    // Real-time listener
     const q = query(tasksCol, orderBy("createdDate", "desc"));
     onSnapshot(q, (snapshot) => {
       taskTableBody.innerHTML = "";
@@ -184,29 +178,51 @@
 
         const docRef = doc(db, "tasks", id);
 
-        // Both incharge and update remark will update after 10s
-        const commitTextUpdate = debounce(async (changes) => {
-          await updateDoc(docRef, { ...changes, currentDate: serverTimestamp() });
-        }, 10000); // 10 seconds
+        // Separate timers for Incharge Person and Update Remark
+        const lastIncharge = { value: data.inchargePerson || "" };
+        const lastRemark = { value: data.updateRemark || "" };
 
-        inchargeCell.addEventListener("input", () => {
-          commitTextUpdate({ inchargePerson: inchargeCell.innerText });
-        });
-        updateRemarkCell.addEventListener("input", () => {
-          commitTextUpdate({ updateRemark: updateRemarkCell.innerText });
-        });
+        const debounceIncharge = debounce(async () => {
+          if (inchargeCell.innerText !== lastIncharge.value) {
+            await updateDoc(docRef, {
+              inchargePerson: inchargeCell.innerText,
+              currentDate: serverTimestamp()
+            });
+            lastIncharge.value = inchargeCell.innerText;
+          }
+        }, 10000);
 
+        const debounceRemark = debounce(async () => {
+          if (updateRemarkCell.innerText !== lastRemark.value) {
+            await updateDoc(docRef, {
+              updateRemark: updateRemarkCell.innerText,
+              currentDate: serverTimestamp()
+            });
+            lastRemark.value = updateRemarkCell.innerText;
+          }
+        }, 10000);
+
+        inchargeCell.addEventListener("input", debounceIncharge);
+        updateRemarkCell.addEventListener("input", debounceRemark);
+
+        // Status update
         select.addEventListener("change", async () => {
+          const newStatus = select.value;
           try {
-            await updateDoc(docRef, { status: select.value, currentDate: serverTimestamp() });
-          } catch (err) { console.error(err); }
+            await updateDoc(docRef, { status: newStatus, currentDate: serverTimestamp() });
+          } catch (err) {
+            console.error("Error updating status:", err);
+          }
         });
 
+        // Complete button
         completeBtn.addEventListener("click", async () => {
           try {
             await deleteDoc(docRef);
             row.remove();
-          } catch (err) { console.error(err); }
+          } catch (err) {
+            console.error("Error deleting task:", err);
+          }
         });
       });
       applyFilter();
