@@ -108,6 +108,11 @@
       border-radius: 4px;
       border: 1px solid #ccc;
     }
+
+    /* ✅ Completed row highlight */
+    tr.completed {
+      background-color: #d4edda !important; /* light green */
+    }
   </style>
 </head>
 <body>
@@ -196,6 +201,15 @@
       if (!ts) return "—";
       try { return ts.toDate().toLocaleString(); }
       catch (e) { return String(ts); }
+    }
+
+    // ✅ helper to update row color
+    function updateRowColor(row, status) {
+      if (status === "Complete") {
+        row.classList.add("completed");
+      } else {
+        row.classList.remove("completed");
+      }
     }
 
     // Add Task
@@ -302,10 +316,14 @@
           const newStatus = select.value;
           try {
             await updateDoc(docRef, { status: newStatus, currentDate: serverTimestamp() });
+            updateRowColor(row, newStatus); // ✅ update row color
           } catch (err) {
             console.error("Error updating status:", err);
           }
         });
+
+        // Apply initial row color
+        updateRowColor(row, data.status || "Open");
 
         // Complete button
         completeBtn.addEventListener("click", async () => {
