@@ -113,6 +113,11 @@
     tr.completed {
       background-color: #d4edda !important; /* light green */
     }
+
+    /* ✅ Progress row highlight */
+    tr.progressing {
+      background-color: #fff3cd !important; /* light yellow */
+    }
   </style>
 </head>
 <body>
@@ -205,10 +210,11 @@
 
     // ✅ helper to update row color
     function updateRowColor(row, status) {
+      row.classList.remove("completed", "progressing");
       if (status === "Complete") {
         row.classList.add("completed");
-      } else {
-        row.classList.remove("completed");
+      } else if (status === "Progress") {
+        row.classList.add("progressing");
       }
     }
 
